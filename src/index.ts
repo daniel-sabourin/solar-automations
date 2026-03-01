@@ -9,11 +9,20 @@ async function main() {
   const args = process.argv.slice(2);
 
   if (args.length === 0) {
-    console.error("Usage: npx tsx src/index.ts [--dump-text] <bill.pdf>");
+    console.error("Usage: npm start -- [--dump-text] <bill.pdf>");
     process.exit(1);
   }
 
-  const dumpText = args.includes("--dump-text");
+  const VALID_FLAGS = new Set(["--dump-text"]);
+  const flags = args.filter((a) => a.startsWith("--"));
+  const unknownFlags = flags.filter((f) => !VALID_FLAGS.has(f));
+  if (unknownFlags.length > 0) {
+    console.error(`Unknown flag: ${unknownFlags.join(", ")}`);
+    console.error("Usage: npm start -- [--dump-text] <bill.pdf>");
+    process.exit(1);
+  }
+
+  const dumpText = flags.includes("--dump-text");
   const pdfPath = args.find((a) => !a.startsWith("--"));
 
   if (!pdfPath) {
