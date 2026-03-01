@@ -1,0 +1,22 @@
+{
+  "name": "solar-automations",
+  "version": "1.0.0",
+  "description": "Automate solar ROI tracking: parse electricity bills, fetch generation data, update Google Sheets",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "googleapis": "^146.0.0",
+    "pdf-parse": "^1.1.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0",
+    "vitest": "^3.0.0",
+    "@types/node": "^22.0.0"
+  }
+}
