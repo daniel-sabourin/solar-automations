@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
-credentials/
-bills/
+credentials/*
+!credentials/.gitkeep
+bills/*
+!bills/.gitkeep
 test/fixtures/*.pdf
