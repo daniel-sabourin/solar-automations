@@ -1,28 +1,43 @@
 import fs from "node:fs";
+import readline from "node:readline";
 import { loadConfig } from "./config.js";
 import { parseBill, extractText } from "./parseBill.js";
 import { fetchGenerationKwh } from "./apsystems.js";
 import { appendRow } from "./sheets.js";
 import type { SheetRow } from "./types.js";
 
+function confirm(question: string): Promise<boolean> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase().startsWith("y"));
+    });
+  });
+}
+
 async function main() {
   const args = process.argv.slice(2);
 
   if (args.length === 0) {
-    console.error("Usage: npm start -- [--dump-text] <bill.pdf>");
+    console.error("Usage: npm start -- [--dump-text] [--dry-run] <bill.pdf>");
     process.exit(1);
   }
 
-  const VALID_FLAGS = new Set(["--dump-text"]);
+  const VALID_FLAGS = new Set(["--dump-text", "--dry-run"]);
   const flags = args.filter((a) => a.startsWith("--"));
   const unknownFlags = flags.filter((f) => !VALID_FLAGS.has(f));
   if (unknownFlags.length > 0) {
     console.error(`Unknown flag: ${unknownFlags.join(", ")}`);
-    console.error("Usage: npm start -- [--dump-text] <bill.pdf>");
+    console.error("Usage: npm start -- [--dump-text] [--dry-run] <bill.pdf>");
     process.exit(1);
   }
 
   const dumpText = flags.includes("--dump-text");
+  const dryRun = flags.includes("--dry-run");
   const pdfPath = args.find((a) => !a.startsWith("--"));
 
   if (!pdfPath) {
@@ -64,8 +79,19 @@ async function main() {
   );
   console.log(`  Total generation: ${generationKwh} kWh`);
 
-  // 3. Append to Google Sheets
-  console.log(`\nAppending to Google Sheets...`);
+  if (dryRun) {
+    console.log("\nDry run — nothing written to Google Sheets.");
+    return;
+  }
+
+  // 3. Confirm before writing
+  const proceed = await confirm("\nWrite this row to Google Sheets? (y/n) ");
+  if (!proceed) {
+    console.log("Aborted.");
+    return;
+  }
+
+  // 4. Write to Google Sheets
   const row: SheetRow = {
     periodStart: bill.periodStart,
     periodEnd: bill.periodEnd,
