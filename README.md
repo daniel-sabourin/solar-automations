@@ -51,7 +51,7 @@ The tool writes to a sheet named **Solar** with these columns:
 ### Process a bill
 
 ```bash
-npx tsx src/index.ts bills/spotpower-2026-02.pdf
+npm start -- bills/spotpower-2026-02.pdf
 ```
 
 This will:
@@ -66,7 +66,7 @@ Duplicate rows are detected by the Start Date in column A — running the same b
 To debug parsing or inspect a new bill format:
 
 ```bash
-npx tsx src/index.ts --dump-text bills/spotpower-2026-02.pdf
+npm start -- --dump-text bills/spotpower-2026-02.pdf
 ```
 
 ## Testing
