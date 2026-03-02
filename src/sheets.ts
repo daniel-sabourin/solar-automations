@@ -74,40 +74,40 @@ async function inspectColumnA(
 }
 
 /**
- * Check if a row with the given periodStart already exists in the sheet.
+ * Inspect the sheet for duplicate and target row number.
+ * Returns { duplicate, targetRow } so the caller can check before writing.
  */
-export async function checkDuplicate(
+export async function preflight(
   config: SheetsConfig,
   periodStart: string,
-): Promise<boolean> {
+): Promise<{ duplicate: boolean; targetRow: number }> {
   const sheets = await getSheetsClient(config.serviceAccountKeyPath);
-  const { duplicate } = await inspectColumnA(sheets, config.spreadsheetId, periodStart);
-  return duplicate;
+  const { duplicate, firstEmptyRow } = await inspectColumnA(
+    sheets,
+    config.spreadsheetId,
+    periodStart,
+  );
+  return { duplicate, targetRow: firstEmptyRow };
 }
 
 /**
- * Write a row to the Solar sheet at the first empty row in column A.
+ * Write a row to a specific row number in the Solar sheet.
  */
 export async function writeRow(
   config: SheetsConfig,
   row: SheetRow,
+  targetRow: number,
 ): Promise<string> {
   const sheets = await getSheetsClient(config.serviceAccountKeyPath);
 
-  const { firstEmptyRow } = await inspectColumnA(
-    sheets,
-    config.spreadsheetId,
-    row.periodStart,
-  );
-
   await sheets.spreadsheets.values.update({
     spreadsheetId: config.spreadsheetId,
-    range: `${SHEET_NAME}!A${firstEmptyRow}:H${firstEmptyRow}`,
+    range: `${SHEET_NAME}!A${targetRow}:H${targetRow}`,
     valueInputOption: "USER_ENTERED",
     requestBody: {
       values: [rowToValues(row)],
     },
   });
 
-  return `Wrote row ${firstEmptyRow} for ${row.periodStart} → ${row.periodEnd}.`;
+  return `Wrote row ${targetRow} for ${row.periodStart} → ${row.periodEnd}.`;
 }

@@ -22,7 +22,7 @@ vi.mock("googleapis", () => ({
   },
 }));
 
-import { checkDuplicate, writeRow } from "../src/sheets.js";
+import { preflight, writeRow } from "../src/sheets.js";
 import type { SheetRow, SheetsConfig } from "../src/types.js";
 
 const config: SheetsConfig = {
@@ -40,33 +40,48 @@ const sampleRow: SheetRow = {
   generationKwh: 380,
 };
 
-describe("checkDuplicate", () => {
+describe("preflight", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("returns false when no duplicate exists", async () => {
+  it("returns no duplicate and correct target row", async () => {
     mockGet.mockResolvedValue({ data: { values: [["2024-12-15"]] } });
-    expect(await checkDuplicate(config, "2025-01-15")).toBe(false);
+    const result = await preflight(config, "2025-01-15");
+    expect(result.duplicate).toBe(false);
+    expect(result.targetRow).toBe(2);
   });
 
-  it("returns true when duplicate exists (YYYY-MM-DD)", async () => {
+  it("returns duplicate when date exists (YYYY-MM-DD)", async () => {
     mockGet.mockResolvedValue({
       data: { values: [["2025-01-15"], ["2024-12-15"]] },
     });
-    expect(await checkDuplicate(config, "2025-01-15")).toBe(true);
+    const result = await preflight(config, "2025-01-15");
+    expect(result.duplicate).toBe(true);
   });
 
-  it("returns true when Sheets returns MM/DD/YYYY format", async () => {
+  it("detects duplicates when Sheets returns MM/DD/YYYY format", async () => {
     mockGet.mockResolvedValue({
       data: { values: [["1/15/2025"], ["12/15/2024"]] },
     });
-    expect(await checkDuplicate(config, "2025-01-15")).toBe(true);
+    const result = await preflight(config, "2025-01-15");
+    expect(result.duplicate).toBe(true);
   });
 
-  it("returns false when sheet is empty", async () => {
+  it("returns row 1 when sheet is empty", async () => {
     mockGet.mockResolvedValue({ data: { values: undefined } });
-    expect(await checkDuplicate(config, "2025-01-15")).toBe(false);
+    const result = await preflight(config, "2025-01-15");
+    expect(result.duplicate).toBe(false);
+    expect(result.targetRow).toBe(1);
+  });
+
+  it("finds a gap in column A", async () => {
+    mockGet.mockResolvedValue({
+      data: { values: [["Start Date"], ["2024-12-15"], [""]] },
+    });
+    const result = await preflight(config, "2025-01-15");
+    expect(result.duplicate).toBe(false);
+    expect(result.targetRow).toBe(3);
   });
 });
 
@@ -75,17 +90,16 @@ describe("writeRow", () => {
     vi.clearAllMocks();
   });
 
-  it("writes to the first empty row", async () => {
-    mockGet.mockResolvedValue({ data: { values: [["2024-12-15"]] } });
+  it("writes to the specified row", async () => {
     mockUpdate.mockResolvedValue({});
 
-    const message = await writeRow(config, sampleRow);
+    const message = await writeRow(config, sampleRow, 5);
 
-    expect(message).toContain("row 2");
+    expect(message).toContain("row 5");
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         spreadsheetId: "test-sheet-id",
-        range: "Solar!A2:H2",
+        range: "Solar!A5:H5",
         valueInputOption: "USER_ENTERED",
         requestBody: {
           values: [[
@@ -99,34 +113,6 @@ describe("writeRow", () => {
             380,
           ]],
         },
-      }),
-    );
-  });
-
-  it("writes to row 1 when sheet is empty", async () => {
-    mockGet.mockResolvedValue({ data: { values: undefined } });
-    mockUpdate.mockResolvedValue({});
-
-    await writeRow(config, sampleRow);
-
-    expect(mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        range: "Solar!A1:H1",
-      }),
-    );
-  });
-
-  it("finds a gap in column A when rows have empty cells", async () => {
-    mockGet.mockResolvedValue({
-      data: { values: [["Start Date"], ["2024-12-15"], [""]] },
-    });
-    mockUpdate.mockResolvedValue({});
-
-    await writeRow(config, sampleRow);
-
-    expect(mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        range: "Solar!A3:H3",
       }),
     );
   });

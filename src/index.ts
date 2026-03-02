@@ -3,7 +3,7 @@ import readline from "node:readline";
 import { loadConfig } from "./config.js";
 import { parseBill, extractText } from "./parseBill.js";
 import { fetchGenerationKwh } from "./apsystems.js";
-import { checkDuplicate, writeRow } from "./sheets.js";
+import { preflight, writeRow } from "./sheets.js";
 import type { SheetRow } from "./types.js";
 
 function confirm(question: string): Promise<boolean> {
@@ -71,12 +71,14 @@ async function main() {
   console.log(`  Bill total: $${bill.billTotalDollars}`);
 
   // 2. Check for duplicate before making API calls
+  let targetRow: number | undefined;
   if (!dryRun) {
-    const isDuplicate = await checkDuplicate(config.sheets, bill.periodStart);
-    if (isDuplicate) {
+    const check = await preflight(config.sheets, bill.periodStart);
+    if (check.duplicate) {
       console.log(`\nRow for period starting ${bill.periodStart} already exists — skipped.`);
       return;
     }
+    targetRow = check.targetRow;
   }
 
   // 3. Fetch generation data from APSystems
@@ -93,14 +95,7 @@ async function main() {
     return;
   }
 
-  // 4. Confirm before writing
-  const proceed = await confirm("\nWrite this row to Google Sheets? (y/n) ");
-  if (!proceed) {
-    console.log("Aborted.");
-    return;
-  }
-
-  // 5. Write to Google Sheets
+  // 4. Show row preview and confirm before writing
   const row: SheetRow = {
     periodStart: bill.periodStart,
     periodEnd: bill.periodEnd,
@@ -111,7 +106,24 @@ async function main() {
     billTotalDollars: bill.billTotalDollars,
   };
 
-  const message = await writeRow(config.sheets, row);
+  console.log(`\nRow ${targetRow} will be written:`);
+  console.log(`  A: Start Date          = ${row.periodStart}`);
+  console.log(`  B: End Date            = ${row.periodEnd}`);
+  console.log(`  C: Imported (kWh)      = ${row.importedKwh}`);
+  console.log(`  D: Exported (kWh)      = ${row.exportedKwh}`);
+  console.log(`  E: Microgen Credit ($) = ${Math.abs(row.microgenCreditDollars)}`);
+  console.log(`  F: Misc Credit ($)     = (skipped)`);
+  console.log(`  G: Bill Total ($)      = ${row.billTotalDollars}`);
+  console.log(`  H: Produced (kWh)      = ${row.generationKwh}`);
+
+  const proceed = await confirm("\nWrite to Google Sheets? (y/n) ");
+  if (!proceed) {
+    console.log("Aborted.");
+    return;
+  }
+
+  // 5. Write to Google Sheets
+  const message = await writeRow(config.sheets, row, targetRow!);
   console.log(`  ${message}`);
   console.log("\nDone! Row added to Google Sheets.");
 }
