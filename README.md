@@ -94,6 +94,41 @@ Dump the raw text extracted from a PDF (useful for debugging parsing):
 npm start -- --dump-text bills/spotpower-2026-02.pdf
 ```
 
+## Docker
+
+Run the watcher as a long-lived container — drop a PDF into `bills/` and it processes automatically.
+
+### Quick start
+
+```bash
+docker compose up -d
+```
+
+This builds the image (multi-stage, production-only dependencies) and starts the watcher in the background. It expects:
+
+- `.env` in the project root with your API keys and sheet ID
+- `credentials/service-account.json` for Google Sheets auth
+- `bills/` directory for incoming PDFs
+
+### Volumes
+
+| Mount | Purpose |
+|-------|---------|
+| `./bills` | Drop PDFs here; the watcher picks them up automatically |
+| `./credentials` | Service account key (mounted read-only) |
+
+### Rebuild after code changes
+
+```bash
+docker compose up -d --build
+```
+
+### View logs
+
+```bash
+docker compose logs -f
+```
+
 ## Testing
 
 ```bash

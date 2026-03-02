@@ -1,0 +1,8 @@
+services:
+  watcher:
+    build: .
+    env_file: .env
+    volumes:
+      - ./bills:/app/bills
+      - ./credentials:/app/credentials:ro
+    restart: unless-stopped
