@@ -26,6 +26,22 @@ async function getSheetsClient(serviceAccountKeyPath: string) {
 }
 
 /**
+ * Normalize a date string to YYYY-MM-DD for comparison.
+ * Handles both "2025-12-22" and "12/22/2025" (Google Sheets formatted).
+ */
+function normalizeDate(raw: string): string {
+  const trimmed = raw.trim();
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  // MM/DD/YYYY (Google Sheets format)
+  const match = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (match) {
+    return `${match[3]}-${match[1].padStart(2, "0")}-${match[2].padStart(2, "0")}`;
+  }
+  return trimmed;
+}
+
+/**
  * Read column A and return duplicate status + first empty row number.
  */
 async function inspectColumnA(
@@ -41,7 +57,9 @@ async function inspectColumnA(
   const values = response.data.values;
   if (!values) return { duplicate: false, firstEmptyRow: 1 };
 
-  const duplicate = values.some((row) => row[0] === periodStart);
+  const duplicate = values.some(
+    (row) => row[0] && normalizeDate(row[0]) === periodStart,
+  );
 
   // Find the first empty cell in column A (1-indexed row number)
   let firstEmptyRow = values.length + 1;
@@ -56,27 +74,31 @@ async function inspectColumnA(
 }
 
 /**
- * Write a row to the Solar sheet at the first empty row in column A.
- * Skips if a row with the same billing period start date already exists.
+ * Check if a row with the given periodStart already exists in the sheet.
  */
-export async function appendRow(
+export async function checkDuplicate(
+  config: SheetsConfig,
+  periodStart: string,
+): Promise<boolean> {
+  const sheets = await getSheetsClient(config.serviceAccountKeyPath);
+  const { duplicate } = await inspectColumnA(sheets, config.spreadsheetId, periodStart);
+  return duplicate;
+}
+
+/**
+ * Write a row to the Solar sheet at the first empty row in column A.
+ */
+export async function writeRow(
   config: SheetsConfig,
   row: SheetRow,
-): Promise<{ appended: boolean; message: string }> {
+): Promise<string> {
   const sheets = await getSheetsClient(config.serviceAccountKeyPath);
 
-  const { duplicate, firstEmptyRow } = await inspectColumnA(
+  const { firstEmptyRow } = await inspectColumnA(
     sheets,
     config.spreadsheetId,
     row.periodStart,
   );
-
-  if (duplicate) {
-    return {
-      appended: false,
-      message: `Row for period starting ${row.periodStart} already exists — skipped.`,
-    };
-  }
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: config.spreadsheetId,
@@ -87,8 +109,5 @@ export async function appendRow(
     },
   });
 
-  return {
-    appended: true,
-    message: `Wrote row ${firstEmptyRow} for ${row.periodStart} → ${row.periodEnd}.`,
-  };
+  return `Wrote row ${firstEmptyRow} for ${row.periodStart} → ${row.periodEnd}.`;
 }

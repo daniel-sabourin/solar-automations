@@ -22,7 +22,7 @@ vi.mock("googleapis", () => ({
   },
 }));
 
-import { appendRow } from "../src/sheets.js";
+import { checkDuplicate, writeRow } from "../src/sheets.js";
 import type { SheetRow, SheetsConfig } from "../src/types.js";
 
 const config: SheetsConfig = {
@@ -40,20 +40,48 @@ const sampleRow: SheetRow = {
   generationKwh: 380,
 };
 
-describe("appendRow", () => {
+describe("checkDuplicate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("writes to the first empty row when no duplicate exists", async () => {
-    // Row 1 has data, row 2 is the first empty row
+  it("returns false when no duplicate exists", async () => {
+    mockGet.mockResolvedValue({ data: { values: [["2024-12-15"]] } });
+    expect(await checkDuplicate(config, "2025-01-15")).toBe(false);
+  });
+
+  it("returns true when duplicate exists (YYYY-MM-DD)", async () => {
+    mockGet.mockResolvedValue({
+      data: { values: [["2025-01-15"], ["2024-12-15"]] },
+    });
+    expect(await checkDuplicate(config, "2025-01-15")).toBe(true);
+  });
+
+  it("returns true when Sheets returns MM/DD/YYYY format", async () => {
+    mockGet.mockResolvedValue({
+      data: { values: [["1/15/2025"], ["12/15/2024"]] },
+    });
+    expect(await checkDuplicate(config, "2025-01-15")).toBe(true);
+  });
+
+  it("returns false when sheet is empty", async () => {
+    mockGet.mockResolvedValue({ data: { values: undefined } });
+    expect(await checkDuplicate(config, "2025-01-15")).toBe(false);
+  });
+});
+
+describe("writeRow", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("writes to the first empty row", async () => {
     mockGet.mockResolvedValue({ data: { values: [["2024-12-15"]] } });
     mockUpdate.mockResolvedValue({});
 
-    const result = await appendRow(config, sampleRow);
+    const message = await writeRow(config, sampleRow);
 
-    expect(result.appended).toBe(true);
-    expect(result.message).toContain("row 2");
+    expect(message).toContain("row 2");
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         spreadsheetId: "test-sheet-id",
@@ -75,25 +103,12 @@ describe("appendRow", () => {
     );
   });
 
-  it("skips when a duplicate row exists", async () => {
-    mockGet.mockResolvedValue({
-      data: { values: [["2025-01-15"], ["2024-12-15"]] },
-    });
-
-    const result = await appendRow(config, sampleRow);
-
-    expect(result.appended).toBe(false);
-    expect(result.message).toContain("already exists");
-    expect(mockUpdate).not.toHaveBeenCalled();
-  });
-
   it("writes to row 1 when sheet is empty", async () => {
     mockGet.mockResolvedValue({ data: { values: undefined } });
     mockUpdate.mockResolvedValue({});
 
-    const result = await appendRow(config, sampleRow);
+    await writeRow(config, sampleRow);
 
-    expect(result.appended).toBe(true);
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         range: "Solar!A1:H1",
@@ -102,15 +117,13 @@ describe("appendRow", () => {
   });
 
   it("finds a gap in column A when rows have empty cells", async () => {
-    // Header in row 1, data in row 2, empty row 3
     mockGet.mockResolvedValue({
       data: { values: [["Start Date"], ["2024-12-15"], [""]] },
     });
     mockUpdate.mockResolvedValue({});
 
-    const result = await appendRow(config, sampleRow);
+    await writeRow(config, sampleRow);
 
-    expect(result.appended).toBe(true);
     expect(mockUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         range: "Solar!A3:H3",

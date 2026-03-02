@@ -3,7 +3,7 @@ import readline from "node:readline";
 import { loadConfig } from "./config.js";
 import { parseBill, extractText } from "./parseBill.js";
 import { fetchGenerationKwh } from "./apsystems.js";
-import { appendRow } from "./sheets.js";
+import { checkDuplicate, writeRow } from "./sheets.js";
 import type { SheetRow } from "./types.js";
 
 function confirm(question: string): Promise<boolean> {
@@ -70,7 +70,16 @@ async function main() {
   console.log(`  Microgen credit: $${bill.microgenCreditDollars}`);
   console.log(`  Bill total: $${bill.billTotalDollars}`);
 
-  // 2. Fetch generation data from APSystems
+  // 2. Check for duplicate before making API calls
+  if (!dryRun) {
+    const isDuplicate = await checkDuplicate(config.sheets, bill.periodStart);
+    if (isDuplicate) {
+      console.log(`\nRow for period starting ${bill.periodStart} already exists — skipped.`);
+      return;
+    }
+  }
+
+  // 3. Fetch generation data from APSystems
   console.log(`\nFetching generation data from APSystems...`);
   const generationKwh = await fetchGenerationKwh(
     config.apsystems,
@@ -84,14 +93,14 @@ async function main() {
     return;
   }
 
-  // 3. Confirm before writing
+  // 4. Confirm before writing
   const proceed = await confirm("\nWrite this row to Google Sheets? (y/n) ");
   if (!proceed) {
     console.log("Aborted.");
     return;
   }
 
-  // 4. Write to Google Sheets
+  // 5. Write to Google Sheets
   const row: SheetRow = {
     periodStart: bill.periodStart,
     periodEnd: bill.periodEnd,
@@ -102,12 +111,9 @@ async function main() {
     billTotalDollars: bill.billTotalDollars,
   };
 
-  const result = await appendRow(config.sheets, row);
-  console.log(`  ${result.message}`);
-
-  if (result.appended) {
-    console.log("\nDone! Row added to Google Sheets.");
-  }
+  const message = await writeRow(config.sheets, row);
+  console.log(`  ${message}`);
+  console.log("\nDone! Row added to Google Sheets.");
 }
 
 main().catch((err) => {
