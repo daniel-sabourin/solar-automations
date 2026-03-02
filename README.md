@@ -50,6 +50,7 @@ The tool writes to a sheet named **Solar** with these columns:
 
 ```
 npm start -- [--dump-text] [--dry-run] <bill.pdf>
+npm start -- --watch
 ```
 
 ### Process a bill
@@ -74,6 +75,16 @@ Preview extracted data without writing to the sheet:
 ```bash
 npm start -- --dry-run bills/spotpower-2026-02.pdf
 ```
+
+### Watch mode
+
+Automatically process new PDFs dropped into the `bills/` directory:
+
+```bash
+npm start -- --watch
+```
+
+This will watch for new `.pdf` files in `bills/` and process each one automatically (no confirmation prompt). Duplicate detection still applies — dropping the same bill twice is safe.
 
 ### Inspect raw PDF text
 
