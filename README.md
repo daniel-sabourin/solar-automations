@@ -48,6 +48,10 @@ The tool writes to a sheet named **Solar** with these columns:
 
 ## Usage
 
+```
+npm start -- [--dump-text] [--dry-run] <bill.pdf>
+```
+
 ### Process a bill
 
 ```bash
@@ -56,14 +60,24 @@ npm start -- bills/spotpower-2026-02.pdf
 
 This will:
 1. Parse the PDF for billing period, usage, and charges
-2. Fetch daily generation data from APSystems for the billing period
-3. Write a row to the first empty row in the Google Sheet
+2. Check for duplicate rows in the Google Sheet
+3. Fetch daily generation data from APSystems for the billing period
+4. Show a preview of the row data and target row number
+5. Prompt for confirmation before writing
 
 Duplicate rows are detected by the Start Date in column A — running the same bill twice is safe.
 
+### Dry run
+
+Preview extracted data without writing to the sheet:
+
+```bash
+npm start -- --dry-run bills/spotpower-2026-02.pdf
+```
+
 ### Inspect raw PDF text
 
-To debug parsing or inspect a new bill format:
+Dump the raw text extracted from a PDF (useful for debugging parsing):
 
 ```bash
 npm start -- --dump-text bills/spotpower-2026-02.pdf
